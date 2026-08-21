@@ -1,0 +1,644 @@
+/* ============================================================================
+   styles.css — Estilos de "Recorrido Electoral · Colima"
+   ----------------------------------------------------------------------------
+   Está organizado en las mismas secciones en las que está dividido el HTML,
+   de arriba hacia abajo: variables → base → barra superior → barra de
+   filtros → mapa → leyenda → botón flotante → panel inferior → menú → toast.
+   Cada bloque explica QUÉ hace y, cuando no es obvio, POR QUÉ.
+   ============================================================================ */
+
+/* ---------------------------------------------------------------------------
+   1) VARIABLES (design tokens)
+   ---------------------------------------------------------------------------
+   Definir los colores/tipografías una sola vez aquí, en variables CSS
+   (custom properties), permite:
+     - Reusarlas en todo el archivo con var(--nombre).
+     - Cambiar la paleta completa editando solo estas líneas.
+   -------------------------------------------------------------------------*/
+:root {
+  /* Paleta principal — inspirada en bitácora de campo / mapa topográfico:
+     tonos tierra (khaki/paper) para lo "pendiente", verde musgo para lo
+     "hecho", y terracota como acento de interacción. */
+  --paper: #F5F3EC;              /* fondo general de la interfaz (no del mapa) */
+  --paper-raised: #FFFFFF;       /* superficies "elevadas": tarjetas, inputs, panel */
+  --ink: #23261F;                /* texto principal / superficies oscuras (barra superior) */
+  --ink-70: rgba(35, 38, 31, .70);
+  --ink-60: rgba(35, 38, 31, .60);
+  --ink-40: rgba(35, 38, 31, .40);
+  --ink-15: rgba(35, 38, 31, .15);
+
+  --line: #E4DFCF;               /* bordes suaves sobre --paper */
+  --line-strong: #D8D2BC;        /* bordes con más contraste (chips, inputs) */
+
+  --moss: #3F6B4F;               /* "visitada" */
+  --moss-dark: #2F5A3C;          /* borde de polígono visitado */
+  --moss-fill-soft: rgba(63, 107, 79, .16);
+  --moss-fill: rgba(63, 107, 79, .55);
+
+  --khaki: #D8D2BC;              /* "pendiente" */
+  --khaki-fill: rgba(216, 210, 188, .45);
+
+  --rust: #B4502E;               /* acento de interacción (selección, distrito local, CTA) */
+  --rust-dark: #8F3E22;
+  --rust-soft: rgba(180, 80, 46, .12);
+
+  --danger: #A3352F;
+  --danger-soft: rgba(163, 53, 47, .08);
+
+  /* Tipografías — 3 roles distintos para que cada tipo de contenido se
+     reconozca de un vistazo: títulos/UI (Space Grotesk), texto normal
+     (Inter) y datos/números de sección (IBM Plex Mono, monoespaciada). */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  /* Sombra estándar reutilizable, para dar sensación de "elevación" a
+     tarjetas, paneles y botones flotantes (look más pulido/profesional). */
+  --shadow-sm: 0 1px 3px rgba(35,38,31,.08), 0 1px 2px rgba(35,38,31,.06);
+  --shadow-md: 0 6px 20px rgba(35,38,31,.12), 0 2px 6px rgba(35,38,31,.08);
+  --shadow-lg: 0 12px 32px rgba(35,38,31,.18);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  /* Duración/curva estándar de transición, para que todas las animaciones
+     de la app se sientan consistentes entre sí. */
+  --ease: cubic-bezier(.4, 0, .2, 1);
+  --dur: .2s;
+
+  /* "Safe areas": espacio reservado en dispositivos con notch / barra de
+     gestos (iPhone), para que la interfaz no quede tapada por el sistema. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ---------------------------------------------------------------------------
+   2) BASE / RESET
+   -------------------------------------------------------------------------*/
+
+/* box-sizing:border-box en todo: el padding y el borde de un elemento se
+   cuentan DENTRO de su ancho/alto declarado, evitando cálculos manuales. */
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  color: var(--ink);
+  background: var(--paper);
+  overflow: hidden;                    /* la app ocupa toda la pantalla, sin scroll de página */
+  -webkit-tap-highlight-color: transparent; /* quita el "flash" gris al tocar en iOS/Android */
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Estado de foco visible y consistente para navegación por teclado
+   (accesibilidad). Se define una sola vez y se hereda en toda la app. */
+:focus-visible {
+  outline: 2px solid var(--rust);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+button, select, input { font-family: inherit; }
+
+/* #app es el contenedor raíz: ocupa toda la ventana (position:fixed inset:0)
+   y organiza sus hijos en columna (barra superior, filtros, mapa, panel). */
+#app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------------------------------------------------------------------------
+   3) BARRA SUPERIOR (marca + contador + botón de menú)
+   -------------------------------------------------------------------------*/
+#topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /* calc(...) suma el padding normal + el "safe area" del notch, así el
+     contenido nunca queda debajo de la cámara/isla dinámica del teléfono. */
+  padding: calc(12px + var(--safe-top)) 16px 12px;
+  background: var(--ink);
+  color: var(--paper);
+  z-index: 500;                        /* por encima del mapa (z-index:1) */
+  box-shadow: var(--shadow-sm);        /* separa visualmente la barra del mapa */
+}
+
+.brand { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+
+/* El "logo" es un cuadrado con degradado radial en tonos terracota — un
+   guiño visual a un "sello" o marcador de mapa, sin usar un ícono externo. */
+.brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: radial-gradient(circle at 32% 32%, var(--rust), var(--rust-dark));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), var(--shadow-sm);
+  flex-shrink: 0;
+}
+
+.brand-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.brand-text strong {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: .2px;
+}
+.brand-text span {
+  font-size: 11px;
+  color: rgba(245, 243, 236, .62);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;             /* "..." si el texto no cabe */
+}
+
+/* Contador de avance ("007/430"): números monoespaciados y tabulares para
+   que no "bailen" de ancho al cambiar de dígito. */
+.tally {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  font-weight: 600;
+  background: rgba(245, 243, 236, .08);
+  border: 1px solid rgba(245, 243, 236, .18);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  letter-spacing: .5px;
+  transition: background var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+/* Clase que app.js agrega momentáneamente cuando el contador cambia, para
+   dar una pequeña señal visual (destello verde + leve escala). */
+.tally.bump {
+  background: var(--moss-fill);
+  transform: scale(1.04);
+}
+.tally-sep { opacity: .45; margin: 0 2px; }
+
+.icon-btn {
+  background: none;
+  border: none;
+  color: var(--paper);
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+.icon-btn:hover { background: rgba(245, 243, 236, .10); }
+.icon-btn:active { background: rgba(245, 243, 236, .18); }
+
+/* ---------------------------------------------------------------------------
+   4) BARRA DE FILTROS (distrito, estado, distritos federales)
+   -------------------------------------------------------------------------*/
+#filterbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--paper-raised);
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;                    /* en pantallas angostas se puede deslizar */
+  z-index: 400;
+  white-space: nowrap;
+}
+#filterbar label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--ink-40);
+  margin-right: 2px;
+}
+#filterbar select {
+  font-size: 13px;
+  font-weight: 500;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--paper-raised);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+#filterbar select:hover { border-color: var(--ink-40); }
+#filterbar select:focus-visible { border-color: var(--rust); }
+
+/* "Chip" tipo botón-pastilla para activar/desactivar la capa de distritos
+   federales. El estado activo usa aria-pressed="true" (accesible) en vez de
+   solo una clase, así que el CSS lo lee con el selector de atributo. */
+.chip {
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--line-strong);
+  background: var(--paper-raised);
+  color: var(--ink-60);
+  border-radius: 999px;
+  padding: 7px 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--dur) var(--ease);
+}
+.chip:hover { border-color: var(--rust); color: var(--rust); }
+.chip[aria-pressed="true"] {
+  background: var(--rust-soft);
+  border-color: var(--rust);
+  color: var(--rust-dark);
+}
+
+/* ---------------------------------------------------------------------------
+   5) MAPA
+   -------------------------------------------------------------------------*/
+#map {
+  flex: 1;                             /* ocupa todo el espacio restante entre filtros y panel */
+  position: relative;
+  z-index: 1;
+  background: #DDE3D8;                 /* color visible mientras cargan los tiles */
+}
+.leaflet-container { font-family: var(--font-body); }
+
+/* Controles nativos de Leaflet (zoom +/-): se les da el mismo lenguaje
+   visual que al resto de la app (bordes suaves, sombra, radios redondeados)
+   en vez de dejar el estilo genérico de la librería. */
+.leaflet-bar {
+  border-radius: var(--radius-sm) !important;
+  overflow: hidden;
+  box-shadow: var(--shadow-md) !important;
+  border: none !important;
+}
+.leaflet-bar a {
+  color: var(--ink) !important;
+  background: var(--paper-raised) !important;
+}
+.leaflet-bar a:hover { background: var(--rust-soft) !important; }
+
+/* Tooltip de sección: se sobreescribe el estilo por defecto de Leaflet
+   (fondo blanco cuadrado) con una tarjeta oscura, con sombra, a tono con
+   la barra superior. */
+.seccion-tt.leaflet-tooltip {
+  background: var(--ink);
+  color: var(--paper);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  box-shadow: var(--shadow-md);
+}
+.seccion-tt.leaflet-tooltip::before { display: none; } /* quita la flechita por defecto */
+
+/* ---------------------------------------------------------------------------
+   6) LEYENDA (pendiente / visitada)
+   -------------------------------------------------------------------------*/
+#legend {
+  position: absolute;
+  left: 14px;
+  bottom: calc(88px + var(--safe-bottom));
+  background: rgba(255, 255, 255, .92);
+  backdrop-filter: blur(6px);          /* difumina lo que hay detrás para dar sensación de "vidrio" */
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 9px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-60);
+  z-index: 450;
+  box-shadow: var(--shadow-md);
+  max-width: calc(100vw - 90px);       /* no se desborda en pantallas angostas */
+}
+.legend-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.legend-count {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--ink);
+  margin-right: 6px;
+}
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 3px; flex-shrink: 0; }
+.dot-sinmarcar { background: var(--khaki); border: 1px solid var(--ink-15); }
+.dot-verde { background: #3F6B4F; }
+.dot-amarillo { background: #C9A227; }
+.dot-rojo { background: #A3352F; }
+
+/* ---------------------------------------------------------------------------
+   6b) SELECTOR DE COLOR — popup del mapa (.color-picker) y botones de
+       color en cada fila de la lista (.dotbtn)
+   ---------------------------------------------------------------------------
+   Ambos se generan dinámicamente desde app.js (con innerHTML), por eso sus
+   estilos viven aquí en vez de estar escritos como atributos inline.
+   -------------------------------------------------------------------------*/
+
+/* Contenedor del popup que Leaflet abre al tocar una sección en el mapa. */
+.color-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 168px;
+}
+.color-picker-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-60);
+  padding: 0 2px 4px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 2px;
+}
+.cp-btn {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.cp-btn:hover { transform: translateX(1px); }
+.cp-verde:hover { background: var(--moss-fill-soft); border-color: #3F6B4F; }
+.cp-amarillo:hover { background: rgba(201, 162, 39, .14); border-color: #C9A227; }
+.cp-rojo:hover { background: rgba(163, 53, 47, .12); border-color: #A3352F; }
+.cp-quitar { color: var(--ink-40); }
+.cp-quitar:hover { background: var(--paper); border-color: var(--line-strong); }
+
+/* Leaflet envuelve el contenido del popup en varias capas propias; se les
+   quita el padding/sombra por defecto para que nuestro .color-picker
+   controle toda la apariencia (si no, se ve un doble recuadro). */
+.cp-popup .leaflet-popup-content-wrapper {
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 8px;
+}
+.cp-popup .leaflet-popup-content { margin: 4px; }
+.cp-popup .leaflet-popup-tip { box-shadow: var(--shadow-sm); }
+
+/* Botones de color (puntos) en cada fila de la lista del panel inferior. */
+.sec-colors { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.dotbtn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+  cursor: pointer;
+  padding: 0;
+  transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.dotbtn:hover { transform: scale(1.12); }
+.dotbtn-verde { background: #3F6B4F; }
+.dotbtn-amarillo { background: #C9A227; }
+.dotbtn-rojo { background: #A3352F; }
+/* El nivel actualmente asignado a la sección se resalta con un anillo de
+   color a juego y un pequeño aumento de tamaño, para distinguirlo de un
+   vistazo de los otros 2 botones "apagados" de la misma fila. */
+.dotbtn.is-active {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 2px var(--paper-raised), 0 0 0 3px currentColor;
+  transform: scale(1.12);
+}
+.dotbtn-verde.is-active { color: #3F6B4F; }
+.dotbtn-amarillo.is-active { color: #C9A227; }
+.dotbtn-rojo.is-active { color: #A3352F; }
+
+/* ---------------------------------------------------------------------------
+   7) BOTÓN FLOTANTE "MI UBICACIÓN"
+   -------------------------------------------------------------------------*/
+.fab {
+  position: absolute;
+  right: 14px;
+  bottom: calc(88px + var(--safe-bottom));
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--paper-raised);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+  z-index: 450;
+  cursor: pointer;
+  transition: transform var(--dur) var(--ease), background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.fab:hover { transform: translateY(-1px); box-shadow: var(--shadow-lg); }
+.fab:active { background: var(--rust-soft); color: var(--rust); transform: translateY(0); }
+
+/* ---------------------------------------------------------------------------
+   8) PANEL INFERIOR (lista de secciones)
+   -------------------------------------------------------------------------*/
+#sheet {
+  position: relative;
+  z-index: 600;
+  background: var(--paper-raised);
+  border-top: 1px solid var(--line);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0; /* esquinas superiores redondeadas, como una hoja que se desliza */
+  box-shadow: 0 -6px 20px rgba(35,38,31,.10);
+  display: flex;
+  flex-direction: column;
+  transition: height .3s var(--ease);
+  height: 100px;                       /* alto colapsado: solo se ve la manija + título */
+  flex-shrink: 0;
+}
+#sheet.sheet-expanded { height: 58vh; } /* alto expandido: ocupa poco más de la mitad de la pantalla */
+
+#sheetHandle {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 12px 18px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.handle-bar { width: 38px; height: 4px; border-radius: 3px; background: var(--line-strong); }
+.handle-label { width: 100%; display: flex; flex-direction: column; align-items: flex-start; }
+.handle-label strong { font-family: var(--font-display); font-size: 14.5px; font-weight: 600; }
+.handle-label span { font-size: 11px; color: var(--ink-40); font-family: var(--font-mono); }
+
+#sheetBody {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 0 14px calc(12px + var(--safe-bottom));
+}
+/* Mientras el panel está colapsado, el contenido de la lista ni siquiera se
+   muestra (display:none), para no dejar espacio invisible ocupando lugar. */
+.sheet-collapsed #sheetBody { display: none; }
+
+.search-row { padding: 4px 0 10px; }
+#searchInput {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  background: var(--paper);
+  color: var(--ink);
+  transition: border-color var(--dur) var(--ease);
+}
+#searchInput:focus-visible { border-color: var(--rust); }
+#searchInput::placeholder { color: var(--ink-40); }
+
+#sectionList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;                    /* scroll propio de la lista, no de toda la página */
+  flex: 1;
+  border-top: 1px solid var(--line);
+}
+#sectionList li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 6px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+#sectionList li:hover { background: var(--paper); }
+#sectionList li:active { background: var(--rust-soft); }
+
+.sec-info { display: flex; flex-direction: column; gap: 2px; }
+.sec-num { font-family: var(--font-mono); font-weight: 600; font-size: 14px; }
+.sec-muni { font-size: 11.5px; color: var(--ink-40); }
+
+.sec-status {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  color: var(--ink-40);
+  white-space: nowrap;
+}
+.sec-status.is-visited {
+  background: var(--moss-fill-soft);
+  border-color: var(--moss);
+  color: var(--moss-dark);
+}
+
+/* ---------------------------------------------------------------------------
+   9) PANEL DE MENÚ (exportar / importar / borrar)
+   -------------------------------------------------------------------------*/
+.menu-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 900;
+  background: var(--paper);
+  padding: calc(20px + var(--safe-top)) 20px calc(20px + var(--safe-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: menuIn .18s var(--ease);  /* pequeña entrada para que no aparezca "de golpe" */
+}
+/* IMPORTANTE: el atributo HTML "hidden" normalmente oculta cualquier
+   elemento (el navegador trae una regla interna "[hidden]{display:none}").
+   Pero como aquí arriba le pusimos "display:flex" a la MISMA clase
+   ".menu-panel", esa regla nuestra pesa lo mismo que la del navegador y,
+   por venir después en el CSS, GANA ELLA — el resultado es que el menú se
+   quedaba visible tapando toda la app aunque tuviera "hidden". Esta regla
+   de aquí abajo es más específica (".menu-panel[hidden]") y por lo tanto
+   tiene prioridad: cuando el elemento tenga el atributo hidden, SIEMPRE se
+   oculta, sin importar el orden en el archivo. */
+.menu-panel[hidden] { display: none; }
+@keyframes menuIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.menu-panel h2 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+.menu-item {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-strong);
+  background: var(--paper-raised);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.menu-item:hover { border-color: var(--rust); box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.menu-item:active { transform: translateY(0); }
+.menu-item-danger { color: var(--danger); border-color: rgba(163,53,47,.3); background: var(--danger-soft); }
+.menu-item-danger:hover { border-color: var(--danger); }
+.menu-note { font-size: 12px; color: var(--ink-40); line-height: 1.6; margin-top: auto; }
+
+/* ---------------------------------------------------------------------------
+   10) TOAST (mensaje flotante temporal)
+   -------------------------------------------------------------------------*/
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: calc(116px + var(--safe-bottom));
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 18px;
+  border-radius: 999px;
+  z-index: 950;
+  box-shadow: var(--shadow-lg);
+  animation: toastIn .2s var(--ease);
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ---------------------------------------------------------------------------
+   11) LAYOUT DE ESCRITORIO
+   ---------------------------------------------------------------------------
+   En pantallas anchas (tablet horizontal / escritorio) el panel de secciones
+   se convierte en un panel flotante fijo a la derecha, en vez de ocupar todo
+   el ancho abajo, y el botón de ubicación/leyenda se acomodan para no
+   quedar tapados por él.
+   -------------------------------------------------------------------------*/
+@media (min-width: 720px) {
+  #sheet {
+    position: absolute;
+    right: 18px;
+    bottom: 18px;
+    left: auto;
+    top: 100px;
+    width: 360px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--line);
+    height: auto;
+  }
+  #sheet.sheet-collapsed { height: auto; }
+  #sheetBody { display: flex !important; height: calc(100% - 60px); }
+
+  .fab, #legend { bottom: 18px; }
+  .fab { right: 396px; }
+  #legend { left: 18px; }
+}
+
+/* Respeta la preferencia del sistema operativo de reducir animaciones
+   (accesibilidad para personas sensibles al movimiento). */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
