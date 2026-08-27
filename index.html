@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+<meta charset="UTF-8">
+<!-- viewport-fit=cover permite que la app use toda la pantalla en iPhones
+     con notch/isla dinámica; el padding "safe-area" en el CSS se encarga
+     de que el contenido no quede tapado por esas zonas. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<!-- Color de la barra de estado del navegador/SO cuando la app está instalada. -->
+<meta name="theme-color" content="#23261F">
+<title>Recorrido Electoral · Colima</title>
+
+<!-- Enlaza el manifest de PWA: le dice al navegador el nombre, ícono y
+     colores que debe usar si el usuario "instala" esta app. -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+
+<!-- Leaflet: la librería de mapas (CSS + JS), cargada desde un CDN público. -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+
+<!-- Fuentes de Google Fonts: Space Grotesk (títulos), Inter (texto normal),
+     IBM Plex Mono (números de sección / contador). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+<!-- Nuestros propios estilos, cargados AL FINAL de la sección <head> para
+     que sobreescriban cualquier estilo por defecto de Leaflet o de las
+     fuentes si hiciera falta. -->
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- #app envuelve TODA la interfaz. En CSS es position:fixed + inset:0,
+     así que ocupa la pantalla completa y organiza a sus hijos en columna:
+     barra superior -> barra de filtros -> mapa -> panel inferior. -->
+<div id="app">
+
+  <!-- ============ BARRA SUPERIOR ============
+       Muestra el nombre de la app, el contador de avance (visitadas/total)
+       y el botón para abrir el menú (exportar/importar/borrar). -->
+  <header id="topbar">
+    <!-- Es un <button> (no un <div>) para que se pueda tocar con teclado y
+         lectores de pantalla, no solo con el mouse/dedo. app.js le agrega
+         el evento de clic (función goHome) que recentra el mapa sobre todo
+         el estado de Colima — sirve como botón "inicio" además de ser el
+         logo/nombre de la app. -->
+    <button id="brandHomeBtn" class="brand" type="button" aria-label="Recorrido · Colima. Tocar para recentrar el mapa">
+      <img class="brand-mark" src="icons/colima-logo.png" alt="" aria-hidden="true">
+      <div class="brand-text">
+        <strong>Recorrido</strong>
+        <span>Colima · secciones electorales</span>
+      </div>
+    </button>
+
+    <!-- Este contador lo actualiza app.js (función updateTally) cada vez
+         que cambia el estado de una sección o el filtro de distrito. -->
+    <div class="tally" id="tally" title="Secciones visitadas / total">
+      <span id="tallyVisited">000</span><span class="tally-sep">/</span><span id="tallyTotal">000</span>
+    </div>
+
+    <!-- Botón que abre el panel de menú (#menuPanel, más abajo).
+         aria-expanded se actualiza desde app.js para accesibilidad. -->
+    <button id="menuBtn" class="icon-btn" aria-label="Abrir menú" aria-expanded="false">
+      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+  </header>
+
+  <!-- ============ BARRA DE FILTROS ============
+       Selector de distrito local, selector de estado (todas/visitadas/
+       pendientes), y el botón-chip para mostrar/ocultar distritos federales. -->
+  <div id="filterbar">
+    <label for="distritoSelect">Distrito local</label>
+    <!-- Las <option> de los 16 distritos se agregan dinámicamente desde
+         app.js (función buildDistritoSelect), no están escritas a mano
+         aquí porque dependen de los datos del geojson. -->
+    <select id="distritoSelect">
+      <option value="">Todos</option>
+    </select>
+
+    <label for="statusFilter">Ver</label>
+    <select id="statusFilter">
+      <option value="all">Todas</option>
+      <option value="verde">Alta aprobación</option>
+      <option value="amarillo">Aprobación media</option>
+      <option value="rojo">Baja aprobación</option>
+      <option value="sin_marcar">Sin marcar</option>
+    </select>
+
+    <!-- aria-pressed lo alterna app.js cada vez que se toca este botón. -->
+    <button id="fedToggleBtn" class="chip" aria-pressed="false">Distritos federales</button>
+
+    <!-- Botón que abre/cierra por completo el panel de secciones (#sheet).
+         A diferencia de los otros filtros, este NO cambia qué se ve en el
+         mapa: solo muestra u oculta la LISTA. El número dentro del chip
+         (id="sectionsToggleBadge") se actualiza desde app.js con cuántas
+         secciones hay en el filtro actual, para dar un adelanto sin tener
+         que abrir el panel. -->
+    <button id="sectionsToggleBtn" class="chip chip-toggle" aria-pressed="false" aria-controls="sheet">
+      Secciones <span id="sectionsToggleBadge" class="chip-badge">0</span>
+    </button>
+  </div>
+
+  <!-- ============ MAPA ============
+       Leaflet "toma control" de este <main id="map"> desde app.js
+       (L.map("map", ...)) y dibuja ahí dentro los tiles y los polígonos. -->
+  <main id="map" role="application" aria-label="Mapa de secciones electorales de Colima"></main>
+
+  <!-- Leyenda fija sobre el mapa explicando los colores, más un pequeño
+       desglose de cuántas secciones hay en cada nivel (lo llena app.js,
+       función updateTally, cada vez que cambia algo). -->
+  <div id="legend">
+    <div class="legend-row">
+      <span class="dot dot-sinmarcar"></span> Sin marcar
+      <span class="dot dot-verde"></span> Alta <span class="legend-count" id="countVerde">0</span>
+      <span class="dot dot-amarillo"></span> Media <span class="legend-count" id="countAmarillo">0</span>
+      <span class="dot dot-rojo"></span> Baja <span class="legend-count" id="countRojo">0</span>
+    </div>
+  </div>
+
+  <!-- Botón flotante para centrar el mapa en la ubicación real del usuario. -->
+  <button id="locateBtn" class="fab" aria-label="Mi ubicación">
+    <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2v3M12 19v3M2 12h3M19 12h3M12 8a4 4 0 100 8 4 4 0 000-8z" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+  </button>
+
+  <!-- ============ PANEL DE SECCIONES ============
+       A diferencia de la versión anterior (una barra siempre visible en
+       la parte de abajo), ahora este panel vive SIEMPRE oculto por
+       completo (clase "sheet-closed", desplazado fuera de la pantalla con
+       CSS) y solo aparece flotando sobre el mapa cuando se abre desde el
+       botón "Secciones" de la barra de filtros, o desde la manija de aquí
+       adentro para cerrarlo. Como es un elemento flotante (position:
+       absolute) y no ocupa espacio permanente en el layout, el mapa
+       siempre tiene todo el alto disponible para él, sin importar si este
+       panel está abierto o cerrado. -->
+  <section id="sheet" class="sheet-closed">
+    <button id="sheetHandle" aria-expanded="false" aria-controls="sheetBody">
+      <span class="handle-bar"></span>
+      <span class="handle-label"><strong id="sheetTitle">Todas las secciones</strong><span id="sheetSub">0 secciones</span></span>
+    </button>
+    <div id="sheetBody">
+      <div class="search-row">
+        <input id="searchInput" type="search" inputmode="numeric" placeholder="Buscar sección (ej. 0129)">
+      </div>
+      <!-- app.js llena este <ul> dinámicamente (función renderList) con un
+           <li> por cada sección visible según los filtros actuales. Cada
+           fila incluye 3 botones de color (verde/amarillo/rojo) para
+           calificar la sección directo desde la lista. -->
+      <ul id="sectionList" aria-label="Lista de secciones"></ul>
+    </div>
+  </section>
+
+  <!-- ============ PANEL DE MENÚ ============
+       Oculto por defecto (atributo "hidden"); se muestra/oculta
+       cambiando ese atributo desde app.js. Ver la nota importante en
+       styles.css sobre por qué existe la regla ".menu-panel[hidden]". -->
+  <div id="menuPanel" class="menu-panel" hidden>
+    <h2>Menú</h2>
+    <button id="exportBtn" class="menu-item">Exportar avance (.json)</button>
+    <button id="importBtn" class="menu-item">Importar avance (.json)</button>
+    <!-- Input de archivo invisible: se "activa" por código (importInput.click())
+         cuando se toca el botón "Importar avance" de arriba. -->
+    <input id="importFile" type="file" accept="application/json" hidden>
+    <button id="resetBtn" class="menu-item menu-item-danger">Borrar todo el avance</button>
+    <p class="menu-note">El avance se guarda solo en este dispositivo/navegador. Exporta un respaldo si vas a cambiar de teléfono.</p>
+    <button id="closeMenuBtn" class="menu-item">Cerrar</button>
+  </div>
+
+  <!-- Mensaje flotante temporal (p.ej. "Archivo inválido"), oculto por
+       defecto y mostrado momentáneamente desde app.js (función showToast). -->
+  <div id="toast" class="toast" hidden></div>
+
+  <!-- ============ FOOTER DE CRÉDITO ============
+       Va DENTRO de #app (como último elemento de la columna flex), NO
+       después de cerrar #app: como #app es position:fixed + inset:0 y
+       cubre toda la pantalla (con "overflow:hidden" en <body>), cualquier
+       cosa que se ponga FUERA de #app en el HTML nunca llega a verse. Al
+       ponerlo aquí adentro, participa del layout en columna igual que la
+       barra superior o el mapa, y el mapa (que tiene flex:1) simplemente
+       se encoge un poco para dejarle espacio. -->
+  <footer class="app-footer">
+    App creada por <strong>BTech Consulting</strong>
+  </footer>
+</div>
+
+<!-- Leaflet debe cargarse ANTES que app.js, porque app.js usa la variable
+     global "L" que esta librería crea. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
